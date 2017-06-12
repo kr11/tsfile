@@ -77,6 +77,7 @@ public class PlainEncoder extends Encoder {
 
   @Override
   public void encode(long value, ByteArrayOutputStream out) {
+//      BytesUtils.longToStream(value, out);
     byte[] bufferBig = new byte[8];
     byte[] bufferLittle = new byte[8];
 

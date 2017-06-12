@@ -167,16 +167,19 @@ public class SeriesWriterImpl implements ISeriesWriter {
             if (currentColumnSize > psThres) {
                 // we will write the current page and check again the size at the predicted middle
                 // of next page
-                valueCountForNextSizeCheck = valueCount / 2;
+
+//                valueCountForNextSizeCheck = valueCount / 2;
                 LOG.debug("enough size, write page {}", desc);
                 writePage();
             } else {
                 // not reached the threshold, will check again midway
-                valueCountForNextSizeCheck =
-                        (int) (valueCount + ((float) valueCount * psThres / currentColumnSize)) / 2 + 1;
+//                valueCountForNextSizeCheck = (int) ((currentColumnSize  / (float)psThres)*valueCount);
+//                valueCountForNextSizeCheck =
+//                        (int) (((float)psThres/currentColumnSize)*valueCount);
                 LOG.debug("{}:{} not enough size, now: {}, change to {}", deltaObjectId, desc,
                         valueCount, valueCountForNextSizeCheck);
             }
+            valueCountForNextSizeCheck = (int) (((float)psThres/currentColumnSize)*valueCount);
         }
     }
 

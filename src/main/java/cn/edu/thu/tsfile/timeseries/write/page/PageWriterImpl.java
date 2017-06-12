@@ -1,31 +1,28 @@
 package cn.edu.thu.tsfile.timeseries.write.page;
 
-import java.io.IOException;
-
+import cn.edu.thu.tsfile.common.utils.bytesinput.ListByteArrayOutputStream;
 import cn.edu.thu.tsfile.compress.Compressor;
-import cn.edu.thu.tsfile.common.utils.bytesinput.ListBytesInput;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import cn.edu.thu.tsfile.common.utils.bytesinput.BytesInput;
-import cn.edu.thu.tsfile.common.utils.bytesinput.BytesInput.PublicBAOS;
 import cn.edu.thu.tsfile.file.metadata.statistics.Statistics;
 import cn.edu.thu.tsfile.file.utils.ReadWriteThriftFormatUtils;
 import cn.edu.thu.tsfile.timeseries.write.desc.MeasurementDescriptor;
 import cn.edu.thu.tsfile.timeseries.write.exception.PageException;
 import cn.edu.thu.tsfile.timeseries.write.io.TSFileIOWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 
 /**
  * a implementation of {@linkplain IPageWriter IPageWriter}
- * 
- * @see IPageWriter IPageWriter
- * @author kangrong
  *
+ * @author kangrong
+ * @see IPageWriter IPageWriter
  */
 public class PageWriterImpl implements IPageWriter {
     private static Logger LOG = LoggerFactory.getLogger(PageWriterImpl.class);
 
-    private ListBytesInput buf;
+    private ListByteArrayOutputStream buf;
     private final Compressor compressor;
     private final MeasurementDescriptor desc;
 
@@ -36,12 +33,12 @@ public class PageWriterImpl implements IPageWriter {
     public PageWriterImpl(MeasurementDescriptor desc) {
         this.desc = desc;
         this.compressor = desc.getCompressor();
-        this.buf = new ListBytesInput();
+        this.buf = new ListByteArrayOutputStream();
     }
 
     @Override
-    public void writePage(BytesInput bytesInput, int valueCount, Statistics<?> statistics,
-            long maxTimestamp, long minTimestamp) throws PageException {
+    public void writePage(ListByteArrayOutputStream bytesInput, int valueCount, Statistics<?> statistics,
+                          long maxTimestamp, long minTimestamp) throws PageException {
         // compress the input data
         if (this.minTimestamp == -1)
             this.minTimestamp = minTimestamp;
@@ -51,13 +48,14 @@ public class PageWriterImpl implements IPageWriter {
             resetTimeStamp();
             throw new PageException("write too much bytes: " + uncompressedSize);
         }
-        BytesInput compressedBytes = compressor.compress(bytesInput);
+        ListByteArrayOutputStream compressedBytes = compressor.compress(bytesInput);
         long compressedSize = compressedBytes.size();
         if (compressedSize > Integer.MAX_VALUE) {
             resetTimeStamp();
             throw new PageException("write too much bytes: " + compressedSize);
         }
-        PublicBAOS tempOutputStream = new PublicBAOS();
+        ByteArrayOutputStream tempOutputStream = new ByteArrayOutputStream(
+                estimateMaxPageHeaderSize() + bytesInput.size());
         // write the page header to IOWriter
         try {
             ReadWriteThriftFormatUtils.writeDataPageHeader((int) uncompressedSize,
@@ -70,27 +68,25 @@ public class PageWriterImpl implements IPageWriter {
                             + e.getMessage());
         }
         this.totalValueCount += valueCount;
-        buf.appendPublicBAOS(tempOutputStream);
-        if (compressedBytes instanceof ListBytesInput)
-            buf.appendListBytesInput((ListBytesInput) compressedBytes);
-        else
-            try {
-                buf.appendBytesInput(compressedBytes);
-            } catch (IOException e) {
-                // remove the written page header in buffer and totalValueCount
-                this.totalValueCount -= valueCount;
-                resetTimeStamp();
-                buf.removeLast();
-                throw new PageException(
-                        "meet IO Exception in buffer appendBytesInput,ignore this page,error message:"
-                                + e.getMessage());
-            }
+//        LOG.info("write page, buf size:{}, buf capacity:{}", buf.size());
+        try {
+            bytesInput.writeAllTo(tempOutputStream);
+        } catch (IOException e) {
+            /*In our method, this line is to flush bytesInput to buf, both of them is in class of ListByteArrayOutputStream,
+            and contain several ByteArrayOutputStream.
+            In general, it won't throw exception. The IOException is just for interface requirement of OutputStream.
+             */
+            throw new PageException(
+                    "meet IO Exception in buffer append,but we cannot understand it:"
+                            + e.getMessage());
+        }
+        buf.append(tempOutputStream);
         LOG.debug("page {}:write page from seriesWriter, valueCount:{}, stats:{},size:{}", desc,
                 valueCount, statistics, estimateMaxPageMemSize());
     }
 
     private void resetTimeStamp() {
-        if(totalValueCount == 0)
+        if (totalValueCount == 0)
             minTimestamp = -1;
     }
 
@@ -113,15 +109,19 @@ public class PageWriterImpl implements IPageWriter {
     @Override
     public void reset() {
         minTimestamp = -1;
-        buf.clear();
+        buf.reset();
         totalValueCount = 0;
+        LOG.info("buf size:" + buf.size());
     }
 
     @Override
     public long estimateMaxPageMemSize() {
         // return size of buffer + page max size;
-        int digestSize = (totalValueCount==0) ? 0 : desc.getTypeLength() * 2;
-        return buf.size()
-                + TSFileIOWriter.metadataConverter.caculatePageHeaderSize(digestSize);
+        return buf.size() + estimateMaxPageHeaderSize();
+    }
+
+    private int estimateMaxPageHeaderSize() {
+        int digestSize = (totalValueCount == 0) ? 0 : desc.getTypeLength() * 2;
+        return TSFileIOWriter.metadataConverter.caculatePageHeaderSize(digestSize);
     }
 }
