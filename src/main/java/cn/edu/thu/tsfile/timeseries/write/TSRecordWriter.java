@@ -10,10 +10,10 @@ import cn.edu.thu.tsfile.timeseries.write.schema.FileSchema;
 /**
  * TSRecordWriter extends InternalRecordWriter and overrides method {@code checkRowGroup()} and
  * {@code writeError()}
- * 
+ *
+ * @author kangrong
  * @see TSRecord TSRecord
  * @see InternalRecordWriter InternalRecordWriter
- * @author kangrong
  */
 public class TSRecordWriter extends InternalRecordWriter<TSRecord> {
     public TSRecordWriter(TSFileConfig conf, TSFileIOWriter tsfileIOWriter,
@@ -23,8 +23,9 @@ public class TSRecordWriter extends InternalRecordWriter<TSRecord> {
 
     @Override
     protected boolean checkRowGroup(TSRecord record) throws IOException {
-        if (!schema.hasDeltaObject(record.deltaObjectId)) {
-            schema.addDeltaObject(record.deltaObjectId);
+//        if (!schema.hasDeltaObject(record.deltaObjectId)) {
+        if (!groupWriters.containsKey(record.deltaObjectId)) {
+//            schema.addDeltaObject(record.deltaObjectId);
             addGroupToInternalRecordWriter(record.deltaObjectId);
         }
         return true;

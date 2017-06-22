@@ -5,7 +5,6 @@ import cn.edu.thu.tsfile.file.metadata.enums.TSDataType;
 import cn.edu.thu.tsfile.timeseries.write.InternalRecordWriter;
 import cn.edu.thu.tsfile.timeseries.write.desc.MeasurementDescriptor;
 import cn.edu.thu.tsfile.timeseries.write.exception.InvalidJsonSchemaException;
-import cn.edu.thu.tsfile.timeseries.write.exception.WriteProcessException;
 import cn.edu.thu.tsfile.timeseries.write.schema.converter.JsonConverter;
 import cn.edu.thu.tsfile.timeseries.write.series.IRowGroupWriter;
 import org.json.JSONObject;
@@ -28,21 +27,21 @@ import java.util.*;
  */
 public class FileSchema {
     static private final Logger LOG = LoggerFactory.getLogger(FileSchema.class);
-    /**
+    /*
      * {@code appearDeltaObjectIdSet} responds to delta object that appeared in this stage. Stage
      * means the time period after the last <b>flushing to file</b> up to now.
      */
-    private Set<String> appearDeltaObjectIdSet = new HashSet<String>();
+//    private Set<String> appearDeltaObjectIdSet = new HashSet<>();
     /**
      * {@code Map<measurementId, TSDataType>}
      */
-    private Map<String, TSDataType> dataTypeMap = new HashMap<String, TSDataType>();
+    private Map<String, TSDataType> dataTypeMap = new HashMap<>();
     /**
      * {@code Map<measurementId, MeasurementDescriptor>}
      */
     private Map<String, MeasurementDescriptor> descriptorMap =
             new HashMap<String, MeasurementDescriptor>();
-    private String[] tempKeyArray = new String[10];
+//    private String[] tempKeyArray = new String[10];
     /**
      * deltaType of this TSFile
      */
@@ -90,22 +89,22 @@ public class FileSchema {
      * @param deltaObjectId - delta object id
      * @return - if this id appeared in this stage, return true, otherwise return false
      */
-    public boolean hasDeltaObject(String deltaObjectId) {
-        return appearDeltaObjectIdSet.contains(deltaObjectId);
-    }
+//    public boolean hasDeltaObject(String deltaObjectId) {
+//        return appearDeltaObjectIdSet.contains(deltaObjectId);
+//    }
 
     /**
      * add a delta object id to this schema
      * 
-     * @param deltaObjectId - delta object id to be added
+//     * @param deltaObjectId - delta object id to be added
      */
-    public void addDeltaObject(String deltaObjectId) {
-        appearDeltaObjectIdSet.add(deltaObjectId);
-    }
+//    public void addDeltaObject(String deltaObjectId) {
+//        appearDeltaObjectIdSet.add(deltaObjectId);
+//    }
 
-    public Set<String> getDeltaObjectAppearedSet() {
-        return appearDeltaObjectIdSet;
-    }
+//    public Set<String> getDeltaObjectAppearedSet() {
+//        return appearDeltaObjectIdSet;
+//    }
 
     public void setDeltaType(String deltaType) {
         this.deltaType = deltaType;
@@ -163,18 +162,19 @@ public class FileSchema {
      *        {@linkplain IRowGroupWriter IRowGroupWriter}
      */
     public void resetUnusedDeltaObjectId(Map<String, IRowGroupWriter> groupWriters) {
-        int size = groupWriters.size();
-        if (size >= tempKeyArray.length)
-            tempKeyArray = new String[size];
-        int i = 0;
-        for (String id : groupWriters.keySet()) {
-            tempKeyArray[i++] = id;
-        }
-        for (String existDeltaObjectId : tempKeyArray) {
-            if (!appearDeltaObjectIdSet.contains(existDeltaObjectId)) {
-                groupWriters.remove(existDeltaObjectId);
-            }
-        }
-        appearDeltaObjectIdSet.clear();
+//        int size = groupWriters.size();
+//        if (size >= tempKeyArray.length)
+//            tempKeyArray = new String[size];
+//        int i = 0;
+//        for (String id : groupWriters.keySet()) {
+//            tempKeyArray[i++] = id;
+//        }
+//        for (String existDeltaObjectId : tempKeyArray) {
+//            if (!appearDeltaObjectIdSet.contains(existDeltaObjectId)) {
+//                groupWriters.remove(existDeltaObjectId);
+//            }
+//        }
+//        appearDeltaObjectIdSet.clear();
+        groupWriters.clear();
     }
 }

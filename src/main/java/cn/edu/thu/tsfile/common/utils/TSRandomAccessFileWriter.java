@@ -25,4 +25,6 @@ public interface TSRandomAccessFileWriter {
   public void close() throws IOException;
 
   public OutputStream getOutputStream();
+
+  void restart();
 }

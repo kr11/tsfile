@@ -167,7 +167,7 @@ public class SeriesWriterImpl implements ISeriesWriter {
             LOG.debug("current line count reaches the upper bound, write page {}", desc);
             writePage();
         }
-        else if (valueCount == valueCountForNextSizeCheck) {
+        else if (valueCount >= valueCountForNextSizeCheck) {
             // not checking the memory used for every value
             long currentColumnSize = dataValueWriter.estimateMaxMemSize();
             if (currentColumnSize > psThres) {

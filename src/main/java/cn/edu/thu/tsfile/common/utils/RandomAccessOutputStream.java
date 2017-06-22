@@ -15,6 +15,7 @@ import java.io.RandomAccessFile;
  *
  */
 public class RandomAccessOutputStream extends OutputStream implements TSRandomAccessFileWriter {
+    private final File file;
     private RandomAccessFile out;
     private static final String DEFAULT_FILE_MODE = "rw";
 
@@ -24,6 +25,7 @@ public class RandomAccessOutputStream extends OutputStream implements TSRandomAc
 
     public RandomAccessOutputStream(File file, String mode) throws IOException {
         out = new RandomAccessFile(file, mode);
+        this.file = file;
     }
 
     @Override
@@ -57,5 +59,16 @@ public class RandomAccessOutputStream extends OutputStream implements TSRandomAc
     @Override
     public OutputStream getOutputStream() {
         return this;
+    }
+
+    @Override
+    public void restart() {
+        try {
+            out.close();
+            file.delete();
+            out = new RandomAccessFile(file, DEFAULT_FILE_MODE);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 }

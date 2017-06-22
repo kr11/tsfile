@@ -2,6 +2,7 @@ package cn.edu.thu.tsfile.timeseries.write.io;
 
 import cn.edu.thu.tsfile.common.conf.TSFileDescriptor;
 import cn.edu.thu.tsfile.common.utils.BytesUtils;
+import cn.edu.thu.tsfile.common.utils.RandomAccessOutputStream;
 import cn.edu.thu.tsfile.common.utils.TSRandomAccessFileWriter;
 import cn.edu.thu.tsfile.common.utils.ListByteArrayOutputStream;
 import cn.edu.thu.tsfile.file.metadata.*;
@@ -197,6 +198,9 @@ public class TSFileIOWriter {
             out.write(new byte[(int)diff]);
         else
             throw new IOException("write too much blank byte array!array size:"+diff);
+        System.out.println("====================clear!!!====================");
+//        out.restart();
+        rowGroups.clear();
     }
     
     /**

@@ -34,7 +34,7 @@ public class TSFileConfig {
      * the memory size threshold for flushing to disk or HDFS, default value is
      * 128 * 1024 * 1024
      */
-    public int rowGroupSize = 128 * 1024 * 1024;
+    public int rowGroupSize = 32 * 1024 * 1024;
     /**
      * the memory size for each series writer to pack page, default value is
      * 8*1024

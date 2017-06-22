@@ -139,10 +139,13 @@ public abstract class InternalRecordWriter<T> {
 		String deltaType = schema.getDeltaType();
 		if (recordCount > 0) {
 			long totalMemStart = deltaFileWriter.getPos();
-			for (String deltaObjectId : schema.getDeltaObjectAppearedSet()) {
+			for (Map.Entry<String, IRowGroupWriter> entry: groupWriters.entrySet()){
+//			for (String deltaObjectId : schema.getDeltaObjectAppearedSet()) {
+				String deltaObjectId = entry.getKey();
 				long memSize = deltaFileWriter.getPos();
 				deltaFileWriter.startRowGroup(recordCount, deltaObjectId, deltaType);
-				IRowGroupWriter groupWriter = groupWriters.get(deltaObjectId);
+//				IRowGroupWriter groupWriter = groupWriters.get(deltaObjectId);
+				IRowGroupWriter groupWriter = entry.getValue();
 				groupWriter.flushToFileWriter(deltaFileWriter);
 				deltaFileWriter.endRowGroup(deltaFileWriter.getPos() - memSize);
 			}
@@ -154,7 +157,7 @@ public abstract class InternalRecordWriter<T> {
 			}
 			else
 				LOG.info("total row group size:{}, row group is not filled", actualTotalRowGroupSize);
-			LOG.info("write row group end");
+			LOG.info("write row group end, file size:{}", deltaFileWriter.getPos());
 			recordCount = 0;
 			reset();
 		}
