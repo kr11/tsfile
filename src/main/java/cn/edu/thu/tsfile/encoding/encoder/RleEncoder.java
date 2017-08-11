@@ -1,27 +1,23 @@
 package cn.edu.thu.tsfile.encoding.encoder;
 
+import cn.edu.thu.tsfile.common.conf.TSFileConfig;
+import cn.edu.thu.tsfile.common.exception.TSFileEncodingException;
+import cn.edu.thu.tsfile.common.utils.Binary;
+import cn.edu.thu.tsfile.common.utils.ReadWriteStreamUtils;
+import cn.edu.thu.tsfile.encoding.common.EndianType;
+import cn.edu.thu.tsfile.file.metadata.enums.TSEncoding;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-import cn.edu.thu.tsfile.encoding.common.EndianType;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-import cn.edu.thu.tsfile.common.conf.TSFileConfig;
-import cn.edu.thu.tsfile.common.exception.TSFileEncodingException;
-import cn.edu.thu.tsfile.common.utils.Binary;
-import cn.edu.thu.tsfile.common.utils.ReadWriteStreamUtils;
-import cn.edu.thu.tsfile.file.metadata.enums.TSEncoding;
-
-
-
 /**
- * @Description Encodes values using a combination of run length encoding and bit packing,
- *               according to the following grammar:
- * 
+ * Encodes values using a combination of run length encoding and bit packing,
+ * according to the following grammar:
  * <pre>
  * {@code
  * rle-bit-packing-hybrid: <length> <bitwidth> <encoded-data>
@@ -38,10 +34,8 @@ import cn.edu.thu.tsfile.file.metadata.enums.TSEncoding;
  * repeated-value := value that is repeated, using a fixed-width of round-up-to-next-byte(bit-width)
  * }
  * </pre>
- * @author XuYi xuyi556677@163.com
- * @date Mar 31, 2016 5:35:09 PM
- * 
- * @param <T>
+ *
+ * @param <T> data type T for RLE
  */
 public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
     private static final Logger LOGGER = LoggerFactory.getLogger(RleEncoder.class);
@@ -96,10 +90,10 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
     protected boolean isBitWidthSaved;
 
     /**
-     * output stream to buffer <bitwidth> <encoded-data>
+     * output stream to buffer {@code <bitwidth> <encoded-data>}
      */
     protected ByteArrayOutputStream byteCache;
-    
+
     protected TSFileConfig config = new TSFileConfig();
 
     public RleEncoder(EndianType endianType) {
@@ -124,9 +118,9 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
 
     /**
      * Write all values buffered in cache to OutputStream
-     * 
+     *
      * @param out - byteArrayOutputStream
-     * @throws IOException
+     * @throws IOException cannot flush to OutputStream
      */
     @Override
     public void flush(ByteArrayOutputStream out) throws IOException {
@@ -137,8 +131,8 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
             } catch (IOException e) {
                 LOGGER.error(
                         "tsfile-encoding RleEncoder : error occurs when writing nums to OutputStram when flushing left nums. "
-                        + "numBufferedValues {}, repeatCount {}, bitPackedGroupCount{}, isBitPackRun {}, isBitWidthSaved {}",
-                        numBufferedValues, repeatCount, bitPackedGroupCount,isBitPackRun, isBitWidthSaved, e);
+                                + "numBufferedValues {}, repeatCount {}, bitPackedGroupCount{}, isBitPackRun {}, isBitWidthSaved {}",
+                        numBufferedValues, repeatCount, bitPackedGroupCount, isBitPackRun, isBitWidthSaved, e);
                 throw e;
             }
         } else if (numBufferedValues > 0) {
@@ -156,8 +150,10 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
 
     /**
      * Write bytes to OutputStream using rle.
-     * rle format: [header][value]
-     * header: (repeated value) << 1
+     * rle format: {@code
+     * [header][value]
+     * header: (repeated value) << 1}
+     * @throws IOException cannot write RLE run
      */
     protected abstract void writeRleRun() throws IOException;
 
@@ -183,11 +179,12 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
 
     /**
      * End a bit-packing run write all bit-packing group to OutputStream bit-packing format:
+     * {@code
      * [header][lastBitPackedNum][bit-packing group]+
      * [bit-packing group]+ are saved in List<byte[]> bytesBuffer
-     * 
+     * }
      * @param lastBitPackedNum - in last bit-packing group, it may have useful values less than 8.
-     *        This param indicates how many values are useful
+     *                         This param indicates how many values are useful
      */
     protected void endPreviousBitPackedRun(int lastBitPackedNum) {
         if (!isBitPackRun) {
@@ -207,7 +204,7 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
     /**
      * Encode T value using rle or bit-packing.
      * It may not write to OutputStream immediately
-     * 
+     *
      * @param value - value to encode
      */
     protected void encodeValue(T value) {
@@ -224,23 +221,23 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
                 // we'll use rle, so just keep on counting repeats for now
                 // we'll write current value to OutputStream when we encounter a different value
                 return;
-            }else if(repeatCount == config.RLE_MAX_REPEATED_NUM+1){
-            	// value occurs more than EncodingConfig.RLE_MAX_REPEATED_NUM
-            	// we'll write current rle run to stream and keep on counting current value
-            	repeatCount = config.RLE_MAX_REPEATED_NUM;
+            } else if (repeatCount == config.RLE_MAX_REPEATED_NUM + 1) {
+                // value occurs more than EncodingConfig.RLE_MAX_REPEATED_NUM
+                // we'll write current rle run to stream and keep on counting current value
+                repeatCount = config.RLE_MAX_REPEATED_NUM;
                 try {
                     writeRleRun();
                     LOGGER.debug("tsfile-encoding RleEncoder : write full rle run to stream");
                 } catch (IOException e) {
                     LOGGER.error(
                             " error occurs when writing full rle run to OutputStram when repeatCount = {}."
-                            + "numBufferedValues {}, repeatCount {}, bitPackedGroupCount{}, isBitPackRun {}, isBitWidthSaved {}",
-                            config.RLE_MAX_REPEATED_NUM+1, numBufferedValues, repeatCount, bitPackedGroupCount,isBitPackRun, isBitWidthSaved, e);
+                                    + "numBufferedValues {}, repeatCount {}, bitPackedGroupCount{}, isBitPackRun {}, isBitWidthSaved {}",
+                            config.RLE_MAX_REPEATED_NUM + 1, numBufferedValues, repeatCount, bitPackedGroupCount, isBitPackRun, isBitWidthSaved, e);
                 }
                 repeatCount = 1;
                 preValue = value;
             }
-            
+
         } else {
             // we encounter a differnt value
             if (repeatCount >= config.RLE_MIN_REPEATED_NUM) {
@@ -249,8 +246,8 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
                 } catch (IOException e) {
                     LOGGER.error(
                             "tsfile-encoding RleEncoder : error occurs when writing num to OutputStram when repeatCount > {}."
-                            + "numBufferedValues {}, repeatCount {}, bitPackedGroupCount{}, isBitPackRun {}, isBitWidthSaved {}",
-                            config.RLE_MIN_REPEATED_NUM, numBufferedValues, repeatCount, bitPackedGroupCount,isBitPackRun, isBitWidthSaved, e);
+                                    + "numBufferedValues {}, repeatCount {}, bitPackedGroupCount{}, isBitPackRun {}, isBitWidthSaved {}",
+                            config.RLE_MIN_REPEATED_NUM, numBufferedValues, repeatCount, bitPackedGroupCount, isBitPackRun, isBitWidthSaved, e);
                 }
             }
             repeatCount = 1;
@@ -266,8 +263,8 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
     }
 
     /**
-    * @Description: clean all useless value in bufferedValues and set 0
-    */
+     * clean all useless value in bufferedValues and set 0
+     */
     protected abstract void clearBuffer();
 
     protected abstract void convertBuffer();
@@ -306,9 +303,9 @@ public abstract class RleEncoder<T extends Comparable<T>> extends Encoder {
     public void encode(Binary value, ByteArrayOutputStream out) {
         throw new TSFileEncodingException(getClass().getName());
     }
-    
+
     @Override
-    public void encode(BigDecimal value, ByteArrayOutputStream out){
+    public void encode(BigDecimal value, ByteArrayOutputStream out) {
         throw new TSFileEncodingException(getClass().getName());
     }
 }

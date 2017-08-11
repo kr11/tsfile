@@ -5,7 +5,6 @@ import cn.edu.thu.tsfile.file.metadata.enums.TSDataType;
 import cn.edu.thu.tsfile.timeseries.write.InternalRecordWriter;
 import cn.edu.thu.tsfile.timeseries.write.desc.MeasurementDescriptor;
 import cn.edu.thu.tsfile.timeseries.write.exception.InvalidJsonSchemaException;
-import cn.edu.thu.tsfile.timeseries.write.exception.WriteProcessException;
 import cn.edu.thu.tsfile.timeseries.write.schema.converter.JsonConverter;
 import cn.edu.thu.tsfile.timeseries.write.series.IRowGroupWriter;
 import org.json.JSONObject;
@@ -14,17 +13,13 @@ import org.slf4j.LoggerFactory;
 
 import java.util.*;
 
-
-
 /**
- * 
  * FileSchema stores the schema of registered measurements and delta objects that appeared in this
  * stage. All delta objects written to the same TSFile have the same schema. FileSchema takes the
  * JSON schema file as a parameter and registers measurement informations. FileSchema also records
  * all appeared delta object IDs in this stage.
- * 
- * @author kangrong
  *
+ * @author kangrong
  */
 public class FileSchema {
     static private final Logger LOG = LoggerFactory.getLogger(FileSchema.class);
@@ -32,28 +27,51 @@ public class FileSchema {
      * {@code appearDeltaObjectIdSet} responds to delta object that appeared in this stage. Stage
      * means the time period after the last <b>flushing to file</b> up to now.
      */
-    private Set<String> appearDeltaObjectIdSet = new HashSet<String>();
+    private Set<String> appearDeltaObjectIdSet = new HashSet<>();
     /**
      * {@code Map<measurementId, TSDataType>}
      */
-    private Map<String, TSDataType> dataTypeMap = new HashMap<String, TSDataType>();
+    private Map<String, TSDataType> dataTypeMap = new HashMap<>();
     /**
      * {@code Map<measurementId, MeasurementDescriptor>}
      */
     private Map<String, MeasurementDescriptor> descriptorMap =
-            new HashMap<String, MeasurementDescriptor>();
+            new HashMap<>();
     private String[] tempKeyArray = new String[10];
     /**
      * deltaType of this TSFile
      */
     private String deltaType;
-    private List<TimeSeriesMetadata> tsMetadata = new ArrayList<TimeSeriesMetadata>();
+    private List<TimeSeriesMetadata> tsMetadata = new ArrayList<>();
     private int currentRowMaxSize;
 
     private Map<String, String> props = new HashMap<>();
 
+    public FileSchema() {
+
+    }
+
+    public FileSchema(JSONObject jsonSchema) throws InvalidJsonSchemaException {
+        JsonConverter.converterJsonToSchema(jsonSchema, this);
+    }
+
+    /**
+     * Add a property to {@code props}. <br>
+     * If the key exists, this method will update the value of the key.
+     *
+     * @param key
+     * @param value
+     */
     public void addProp(String key, String value) {
         props.put(key, value);
+    }
+
+    public boolean hasProp(String key) {
+        return props.containsKey(key);
+    }
+
+    public Map<String, String> getProps() {
+        return props;
     }
 
     public void setProps(Map<String, String> props) {
@@ -61,12 +79,8 @@ public class FileSchema {
         this.props.putAll(props);
     }
 
-    public Map<String, String> getProps() {
-        return props;
-    }
-
     public String getProp(String key) {
-        if(props.containsKey(key))
+        if (props.containsKey(key))
             return props.get(key);
         else
             return null;
@@ -80,13 +94,13 @@ public class FileSchema {
         this.currentRowMaxSize = currentRowMaxSize;
     }
 
-    public FileSchema(JSONObject jsonSchema) throws InvalidJsonSchemaException {
-        JsonConverter.converterJsonToSchema(jsonSchema, this);
+    public void addCurrentRowMaxSize(int currentSeries) {
+        this.currentRowMaxSize += currentSeries;
     }
 
     /**
      * judge whether given delta object id exists in this stage.
-     * 
+     *
      * @param deltaObjectId - delta object id
      * @return - if this id appeared in this stage, return true, otherwise return false
      */
@@ -96,7 +110,7 @@ public class FileSchema {
 
     /**
      * add a delta object id to this schema
-     * 
+     *
      * @param deltaObjectId - delta object id to be added
      */
     public void addDeltaObject(String deltaObjectId) {
@@ -107,15 +121,15 @@ public class FileSchema {
         return appearDeltaObjectIdSet;
     }
 
-    public void setDeltaType(String deltaType) {
-        this.deltaType = deltaType;
-    }
-
     public String getDeltaType() {
         return deltaType;
     }
 
-    public void setSeriesType(String measurementUID, TSDataType type) {
+    public void setDeltaType(String deltaType) {
+        this.deltaType = deltaType;
+    }
+
+    public void addSeries(String measurementUID, TSDataType type) {
         dataTypeMap.put(measurementUID, type);
     }
 
@@ -137,13 +151,11 @@ public class FileSchema {
 
     /**
      * add a TimeSeriesMetadata into this fileSchema
-     * 
+     *
      * @param measurementId - the measurement id of this TimeSeriesMetadata
-     * @param type - the data type of this TimeSeriesMetadata
-     * @param measurementObj - the json object of this measurement
+     * @param type          - the data type of this TimeSeriesMetadata
      */
-    public void addTimeSeriesMetadata(String measurementId, TSDataType type,
-            JSONObject measurementObj) {
+    public void addTimeSeriesMetadata(String measurementId, TSDataType type) {
         TimeSeriesMetadata ts = new TimeSeriesMetadata(measurementId, type, deltaType);
         LOG.debug("add Time Series:{}", ts);
         this.tsMetadata.add(ts);
@@ -158,13 +170,13 @@ public class FileSchema {
      * InternalRecordWriter} after flushing row group to file. The delta object id used in last
      * stage remains in this stage. The delta object id which not be used in last stage will be
      * removed
-     * 
+     *
      * @param groupWriters - {@code Map<deltaObjectId, RowGroupWriter>}, a map remaining all
-     *        {@linkplain IRowGroupWriter IRowGroupWriter}
+     *                     {@linkplain IRowGroupWriter IRowGroupWriter}
      */
     public void resetUnusedDeltaObjectId(Map<String, IRowGroupWriter> groupWriters) {
         int size = groupWriters.size();
-        if (size < tempKeyArray.length)
+        if (size >= tempKeyArray.length)
             tempKeyArray = new String[size];
         int i = 0;
         for (String id : groupWriters.keySet()) {

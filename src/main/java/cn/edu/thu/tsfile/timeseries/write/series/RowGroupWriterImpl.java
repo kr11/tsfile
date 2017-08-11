@@ -1,13 +1,8 @@
 package cn.edu.thu.tsfile.timeseries.write.series;
 
-import java.io.IOException;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
+import cn.edu.thu.tsfile.common.utils.Pair;
+import cn.edu.thu.tsfile.file.metadata.enums.CompressionTypeName;
+import cn.edu.thu.tsfile.timeseries.read.query.DynamicOneColumnData;
 import cn.edu.thu.tsfile.timeseries.write.desc.MeasurementDescriptor;
 import cn.edu.thu.tsfile.timeseries.write.exception.NoMeasurementException;
 import cn.edu.thu.tsfile.timeseries.write.exception.WriteProcessException;
@@ -16,13 +11,21 @@ import cn.edu.thu.tsfile.timeseries.write.page.IPageWriter;
 import cn.edu.thu.tsfile.timeseries.write.page.PageWriterImpl;
 import cn.edu.thu.tsfile.timeseries.write.record.DataPoint;
 import cn.edu.thu.tsfile.timeseries.write.schema.FileSchema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * a implementation of IRowGroupWriter
- * 
- * @see IRowGroupWriter IRowGroupWriter
- * @author kangrong
  *
+ * @author kangrong
+ * @see IRowGroupWriter IRowGroupWriter
  */
 public class RowGroupWriterImpl implements IRowGroupWriter {
     private static Logger LOG = LoggerFactory.getLogger(RowGroupWriterImpl.class);
@@ -32,8 +35,7 @@ public class RowGroupWriterImpl implements IRowGroupWriter {
     public RowGroupWriterImpl(String deltaObjectId, FileSchema fileSchema, int pageSizeThreshold) {
         this.deltaObjectId = deltaObjectId;
         for (MeasurementDescriptor desc : fileSchema.getDescriptor()) {
-            this.dataSeriesWriters.put(desc.getMeasurementId(),
-                    createSeriesWriter(desc, pageSizeThreshold));
+            this.dataSeriesWriters.put(desc.getMeasurementId(), createSeriesWriter(desc, pageSizeThreshold));
         }
     }
 
@@ -47,11 +49,24 @@ public class RowGroupWriterImpl implements IRowGroupWriter {
         for (DataPoint point : data) {
             String measurementId = point.getMeasurementId();
             if (!dataSeriesWriters.containsKey(measurementId))
-                throw new NoMeasurementException("time " + time + ", measurement id "
-                        + measurementId + " not found!");
+                throw new NoMeasurementException("time " + time + ", measurement id " + measurementId + " not found!");
             point.write(time, dataSeriesWriters.get(measurementId));
 
         }
+    }
+
+    @Override
+    public List<Object> query(String measurementId) {
+        if (dataSeriesWriters.get(measurementId) == null) {
+            LOG.warn("The measurementId {} is not exist", measurementId);
+            DynamicOneColumnData left = null;
+            Pair<List<ByteArrayInputStream>, CompressionTypeName> right = null;
+            List<Object> result = new ArrayList<>();
+            result.add(left);
+            result.add(right);
+            return result;
+        }
+        return dataSeriesWriters.get(measurementId).query();
     }
 
     @Override
@@ -69,5 +84,4 @@ public class RowGroupWriterImpl implements IRowGroupWriter {
             bufferSize += seriesWriter.estimateMaxSeriesMemSize();
         return bufferSize;
     }
-
 }

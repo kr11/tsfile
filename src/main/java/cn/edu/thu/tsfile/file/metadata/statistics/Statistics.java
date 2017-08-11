@@ -1,26 +1,22 @@
 package cn.edu.thu.tsfile.file.metadata.statistics;
 
-import java.math.BigDecimal;
-
+import cn.edu.thu.tsfile.common.exception.UnknownColumnTypeException;
 import cn.edu.thu.tsfile.common.utils.Binary;
 import cn.edu.thu.tsfile.file.metadata.enums.TSDataType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import cn.edu.thu.tsfile.common.exception.UnknownColumnTypeException;
+import java.math.BigDecimal;
 
 /**
  * This class is used for recording statistic information of each measurement in a delta file.While
  * writing processing, the processor records the digest information. Statistics includes maximum,
  * minimum and null value count up to version 0.0.1.<br>
  * Each data type extends this Statistic as super class.<br>
- * 
- * 
- * @since 0.0.1
- * 
- * @author kangrong
  *
- * @param <T>
+ * @param <T> data type for Statistics
+ * @author kangrong
+ * @since 0.0.1
  */
 public abstract class Statistics<T> {
     private static final Logger LOG = LoggerFactory.getLogger(Statistics.class);
@@ -28,17 +24,11 @@ public abstract class Statistics<T> {
     // and min is not null;
     protected boolean isEmpty = true;
 
-    abstract public void setMinMaxFromBytes(byte[] minBytes, byte[] maxBytes);
-
-    abstract public T getMin();
-
-    abstract public T getMax();
-
     /**
      * static method providing statistic instance for respective data type.
-     * 
+     *
      * @param type - data type
-     * @return
+     * @return Statistics
      */
     public static Statistics<?> getStatsByType(TSDataType type) {
         switch (type) {
@@ -46,10 +36,12 @@ public abstract class Statistics<T> {
                 return new IntegerStatistics();
             case INT64:
                 return new LongStatistics();
+            case TEXT:
+                return new BinaryStatistics();
             case ENUMS:
-            case BOOLEAN:
-            case BYTE_ARRAY:
                 return new NoStatistics();
+            case BOOLEAN:
+                return new BooleanStatistics();
             case DOUBLE:
                 return new DoubleStatistics();
             case FLOAT:
@@ -61,11 +53,17 @@ public abstract class Statistics<T> {
         }
     }
 
+    abstract public void setMinMaxFromBytes(byte[] minBytes, byte[] maxBytes);
+
+    abstract public T getMin();
+
+    abstract public T getMax();
+
     /**
      * merge parameter to this statistic. Including
-     * 
-     * @param stats
-     * @throws StatisticsClassException
+     *
+     * @param stats input statistics
+     * @throws StatisticsClassException cannot merge statistics
      */
     public void mergeStatistics(Statistics<?> stats) throws StatisticsClassException {
         if (stats == null) {
@@ -106,9 +104,9 @@ public abstract class Statistics<T> {
     /**
      * This method with two parameters is only used by {@code overflow} which
      * updates/inserts/deletes timestamp.
-     * 
-     * @param min
-     * @param max
+     *
+     * @param min min timestamp
+     * @param max max timestamp
      */
     public void updateStats(long min, long max) {
         throw new UnsupportedOperationException();
@@ -130,7 +128,8 @@ public abstract class Statistics<T> {
         throw new UnsupportedOperationException();
     }
 
-    public void reset() {}
+    public void reset() {
+    }
 
     abstract public byte[] getMaxBytes();
 

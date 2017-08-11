@@ -1,28 +1,32 @@
 package cn.edu.thu.tsfile.timeseries.write.series;
 
-import java.io.IOException;
-import java.math.BigDecimal;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import cn.edu.thu.tsfile.common.conf.TSFileConfig;
 import cn.edu.thu.tsfile.common.conf.TSFileDescriptor;
 import cn.edu.thu.tsfile.common.utils.Binary;
+import cn.edu.thu.tsfile.common.utils.Pair;
+import cn.edu.thu.tsfile.file.metadata.enums.CompressionTypeName;
 import cn.edu.thu.tsfile.file.metadata.enums.TSDataType;
 import cn.edu.thu.tsfile.file.metadata.statistics.Statistics;
+import cn.edu.thu.tsfile.timeseries.read.query.DynamicOneColumnData;
 import cn.edu.thu.tsfile.timeseries.write.desc.MeasurementDescriptor;
 import cn.edu.thu.tsfile.timeseries.write.exception.PageException;
 import cn.edu.thu.tsfile.timeseries.write.io.TSFileIOWriter;
 import cn.edu.thu.tsfile.timeseries.write.page.IPageWriter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * A implementation of {@code ISeriesWriter}. {@code SeriesWriterImpl} consists of a
- * {@code PageWriter}, a {@code ValueWriter}, and two {@code Statistics}.
- * 
- * @see ISeriesWriter ISeriesWriter
- * @author kangrong
+ * A implementation of {@code ISeriesWriter}. {@code SeriesWriterImpl} consists
+ * of a {@code PageWriter}, a {@code ValueWriter}, and two {@code Statistics}.
  *
+ * @author kangrong
+ * @see ISeriesWriter ISeriesWriter
  */
 public class SeriesWriterImpl implements ISeriesWriter {
     private static final Logger LOG = LoggerFactory.getLogger(SeriesWriterImpl.class);
@@ -34,12 +38,19 @@ public class SeriesWriterImpl implements ISeriesWriter {
      * page size threshold
      */
     private final long psThres;
+    private final int pageCountUpperBound;
     /**
      * value writer to encode data
      */
     private ValueWriter dataValueWriter;
+
     /**
-     * value count on of a page. It will be reset after calling {@code writePage()}
+     * cache current page data
+     */
+    private DynamicOneColumnData cacheCurrentPageData;
+    /**
+     * value count on of a page. It will be reset after calling
+     * {@code writePage()}
      */
     private int valueCount;
     private int valueCountForNextSizeCheck;
@@ -48,7 +59,8 @@ public class SeriesWriterImpl implements ISeriesWriter {
      */
     private Statistics<?> pageStatistics;
     /**
-     * statistic on a stage. It will be reset after calling {@code writeToFileWriter()}
+     * statistic on a stage. It will be reset after calling
+     * {@code writeToFileWriter()}
      */
     private Statistics<?> seriesStatistics;
     private long time;
@@ -56,8 +68,8 @@ public class SeriesWriterImpl implements ISeriesWriter {
     private String deltaObjectId;
     private MeasurementDescriptor desc;
 
-    public SeriesWriterImpl(String deltaObjectId, MeasurementDescriptor desc,
-            IPageWriter pageWriter, int pageSizeThreshold) {
+    public SeriesWriterImpl(String deltaObjectId, MeasurementDescriptor desc, IPageWriter pageWriter,
+                            int pageSizeThreshold) {
         this.deltaObjectId = deltaObjectId;
         this.desc = desc;
         this.dataType = desc.getType();
@@ -69,9 +81,15 @@ public class SeriesWriterImpl implements ISeriesWriter {
         this.seriesStatistics = Statistics.getStatsByType(desc.getType());
         resetPageStatistics();
         this.dataValueWriter = new ValueWriter();
+        this.pageCountUpperBound = TSFileDescriptor.getInstance().getConfig().maxNumberOfPointsInPage;
 
         this.dataValueWriter.setTimeEncoder(desc.getTimeEncoder());
         this.dataValueWriter.setValueEncoder(desc.getValueEncoder());
+        // cache page data
+        TSFileConfig config = TSFileDescriptor.getInstance().getConfig();
+        if (config.duplicateIncompletedPage) {
+            this.cacheCurrentPageData = new DynamicOneColumnData(desc.getType(), true);
+        }
     }
 
     private void resetPageStatistics() {
@@ -84,6 +102,10 @@ public class SeriesWriterImpl implements ISeriesWriter {
         ++valueCount;
         dataValueWriter.write(time, value);
         pageStatistics.updateStats(value);
+        if (cacheCurrentPageData != null) {
+            cacheCurrentPageData.putTime(time);
+            cacheCurrentPageData.putLong(value);
+        }
         if (minTimestamp == -1)
             minTimestamp = time;
         checkPageSize();
@@ -95,6 +117,10 @@ public class SeriesWriterImpl implements ISeriesWriter {
         ++valueCount;
         dataValueWriter.write(time, value);
         pageStatistics.updateStats(value);
+        if (cacheCurrentPageData != null) {
+            cacheCurrentPageData.putTime(time);
+            cacheCurrentPageData.putInt(value);
+        }
         if (minTimestamp == -1)
             minTimestamp = time;
         checkPageSize();
@@ -106,6 +132,10 @@ public class SeriesWriterImpl implements ISeriesWriter {
         ++valueCount;
         dataValueWriter.write(time, value);
         pageStatistics.updateStats(value);
+        if (cacheCurrentPageData != null) {
+            cacheCurrentPageData.putTime(time);
+            cacheCurrentPageData.putBoolean(value);
+        }
         if (minTimestamp == -1)
             minTimestamp = time;
         checkPageSize();
@@ -117,6 +147,10 @@ public class SeriesWriterImpl implements ISeriesWriter {
         ++valueCount;
         dataValueWriter.write(time, value);
         pageStatistics.updateStats(value);
+        if (cacheCurrentPageData != null) {
+            cacheCurrentPageData.putTime(time);
+            cacheCurrentPageData.putFloat(value);
+        }
         if (minTimestamp == -1)
             minTimestamp = time;
         checkPageSize();
@@ -128,6 +162,10 @@ public class SeriesWriterImpl implements ISeriesWriter {
         ++valueCount;
         dataValueWriter.write(time, value);
         pageStatistics.updateStats(value);
+        if (cacheCurrentPageData != null) {
+            cacheCurrentPageData.putTime(time);
+            cacheCurrentPageData.putDouble(value);
+        }
         if (minTimestamp == -1)
             minTimestamp = time;
         checkPageSize();
@@ -150,33 +188,51 @@ public class SeriesWriterImpl implements ISeriesWriter {
         ++valueCount;
         dataValueWriter.write(time, value);
         pageStatistics.updateStats(value);
+        if (cacheCurrentPageData != null) {
+            cacheCurrentPageData.putTime(time);
+            cacheCurrentPageData.putBinary(value);
+        }
         if (minTimestamp == -1)
             minTimestamp = time;
         checkPageSize();
     }
 
+    @Override
+    public List<Object> query() {
+
+        Pair<List<ByteArrayInputStream>, CompressionTypeName> pagePairData = pageWriter.query();
+        DynamicOneColumnData ret;
+        ret = new DynamicOneColumnData(cacheCurrentPageData.dataType, true);
+
+        ret.mergeRecord(cacheCurrentPageData);
+        List<Object> result = new ArrayList<>();
+        result.add(ret);
+        result.add(pagePairData);
+
+        return result;
+    }
+
     /**
-     * check occupied memory size, if it exceeds the PageSize threshold, flush them to given
-     * OutputStream.
-     *
+     * check occupied memory size, if it exceeds the PageSize threshold, flush
+     * them to given OutputStream.
      */
     private void checkPageSize() {
-        if (valueCount > valueCountForNextSizeCheck) {
+        if (valueCount == pageCountUpperBound) {
+            LOG.debug("current line count reaches the upper bound, write page {}", desc);
+            writePage();
+        } else if (valueCount >= valueCountForNextSizeCheck) {
             // not checking the memory used for every value
             long currentColumnSize = dataValueWriter.estimateMaxMemSize();
             if (currentColumnSize > psThres) {
-                // we will write the current page and check again the size at the predicted middle
-                // of next page
-                valueCountForNextSizeCheck = valueCount / 2;
-                LOG.debug("enough size, write page {}", desc);
+                // we will write the current page
+                LOG.info("enough size, write page {}", desc);
                 writePage();
             } else {
-                // not reached the threshold, will check again midway
-                valueCountForNextSizeCheck =
-                        (int) (valueCount + ((float) valueCount * psThres / currentColumnSize)) / 2 + 1;
-                LOG.debug("{}:{} not enough size, now: {}, change to {}", deltaObjectId, desc,
-                        valueCount, valueCountForNextSizeCheck);
+                LOG.debug("{}:{} not enough size, now: {}, change to {}", deltaObjectId, desc, valueCount,
+                        valueCountForNextSizeCheck);
             }
+            // reset the valueCountForNextSizeCheck for the next page
+            valueCountForNextSizeCheck = (int) (((float) psThres / currentColumnSize) * valueCount);
         }
     }
 
@@ -185,15 +241,16 @@ public class SeriesWriterImpl implements ISeriesWriter {
      */
     private void writePage() {
         try {
-            pageWriter.writePage(dataValueWriter.getBytes(), valueCount, pageStatistics, time,
-                    minTimestamp);
+            pageWriter.writePage(dataValueWriter.getBytes(), valueCount, pageStatistics, time, minTimestamp);
             this.seriesStatistics.mergeStatistics(this.pageStatistics);
+            // clear current page data
+            if (cacheCurrentPageData != null) {
+                this.cacheCurrentPageData.clearData();
+            }
         } catch (IOException e) {
-            LOG.error("meet error in dataValueWriter.getBytes(),ignore this page, {}",
-                    e.getMessage());
+            LOG.error("meet error in dataValueWriter.getBytes(),ignore this page, {}", e.getMessage());
         } catch (PageException e) {
-            LOG.error("meet error in pageWriter.writePage,ignore this page, error message:{}",
-                    e.getMessage());
+            LOG.error("meet error in pageWriter.writePage,ignore this page, error message:{}", e.getMessage());
         } finally {
             // clear start time stamp for next initializing
             minTimestamp = -1;
