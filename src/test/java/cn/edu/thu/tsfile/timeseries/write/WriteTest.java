@@ -9,11 +9,13 @@ import cn.edu.thu.tsfile.timeseries.basis.TsFile;
 import cn.edu.thu.tsfile.timeseries.read.LocalFileInput;
 import cn.edu.thu.tsfile.timeseries.utils.RecordUtils;
 import cn.edu.thu.tsfile.timeseries.utils.StringContainer;
+import cn.edu.thu.tsfile.timeseries.write.exception.InvalidJsonSchemaException;
 import cn.edu.thu.tsfile.timeseries.write.exception.WriteProcessException;
 import cn.edu.thu.tsfile.timeseries.write.io.TSFileIOWriter;
 import cn.edu.thu.tsfile.timeseries.write.record.TSRecord;
 import cn.edu.thu.tsfile.timeseries.write.schema.FileSchema;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 import org.json.JSONTokener;
@@ -37,7 +39,6 @@ import static org.junit.Assert.fail;
  * test writing processing correction combining writing process and reading process.
  *
  * @author kangrong
- *
  */
 public class WriteTest {
     private static final Logger LOG = LoggerFactory.getLogger(WriteTest.class);
@@ -54,8 +55,9 @@ public class WriteTest {
     private int prePageSize;
     private int prePageCheckThres;
     private TSFileConfig conf = TSFileDescriptor.getInstance().getConfig();
-    //@Before
-    public void prepare() throws IOException {
+
+    @Before
+    public void prepare() throws IOException, InvalidJsonSchemaException {
         inputDataFile = "src/test/resources/writeTestInputData";
         outputDataFile = "src/test/resources/writeTestOutputData.ksn";
         errorOutputDataFile = "src/test/resources/writeTestErrorOutputData.ksn";
@@ -77,15 +79,17 @@ public class WriteTest {
             file.delete();
         if (errorFile.exists())
             errorFile.delete();
-        try {
-            JSONObject jsonSchema =
-                    new JSONObject(new JSONTokener(new FileReader(new File(schemaFile))));
-            schema = new FileSchema(jsonSchema);
-            LOG.info(schema.toString());
-        } catch (JSONException | FileNotFoundException | WriteProcessException e1) {
-            e1.printStackTrace();
-            fail(e1.getMessage());
-        }
+        JSONObject emptySchema = new JSONObject(
+                "{\"delta_type\": \"test_type\",\"properties\": {\n" +
+                        "\"key1\": \"value1\",\n" +
+                        "\"key2\": \"value2\"\n" +
+                        "},\"schema\": [],}");
+        JSONArray measurementArray =
+                new JSONObject(new JSONTokener(new FileReader(new File(schemaFile)))).getJSONArray(JsonFormatConstant
+                        .JSON_SCHEMA);
+        ;
+        schema = new FileSchema(emptySchema);
+        LOG.info(schema.toString());
         WriteSupport<TSRecord> writeSupport = new TSRecordWriteSupport();
         TSRandomAccessFileWriter outputStream = null;
         try {
@@ -95,10 +99,14 @@ public class WriteTest {
         }
         TSFileIOWriter tsfileWriter = new TSFileIOWriter(schema, outputStream);
         innerWriter =
-                new TestInnerWriter(conf, tsfileWriter, writeSupport, schema);
+                new TSRecordWriter(conf, tsfileWriter, writeSupport, schema);
+        for (int i = 0; i < measurementArray.length(); i++) {
+            innerWriter.addMeasurementByJson((JSONObject) measurementArray.get(i));
+        }
+
     }
 
-    //@After
+    @After
     public void after() {
         File file = new File(inputDataFile);
         if (file.exists())
@@ -111,7 +119,7 @@ public class WriteTest {
             file.delete();
     }
 
-    //@After
+    @After
     public void end() {
         conf.pageSizeInByte = prePageSize;
         conf.pageCheckSizeThreshold = prePageCheckThres;
@@ -155,7 +163,8 @@ public class WriteTest {
         fw.write(d + "\r\n");
         fw.close();
     }
-    //@Test
+
+    @Test
     public void writeTest() throws IOException, InterruptedException {
         try {
             write();
@@ -201,7 +210,7 @@ public class WriteTest {
         LOG.info("stage size: {}, write {} group data", stageSize, lineCount);
     }
 
-    private String[][] stageDeltaObjectIds = { {"d1", "d2", "d3"}, {"d1"}, {"d2", "d3"}};
+    private String[][] stageDeltaObjectIds = {{"d1", "d2", "d3"}, {"d1"}, {"d2", "d3"}};
     private String[] measurementIds = {"s0", "s1", "s2", "s3", "s4", "s5"};
     private long longBase = System.currentTimeMillis() * 1000;
     private String[] enums = {"MAN", "WOMAN"};
@@ -213,32 +222,12 @@ public class WriteTest {
             StringContainer sc = new StringContainer(JsonFormatConstant.TSRECORD_SEPARATOR);
             sc.addTail(stageDeltaObjectIds[stage][i], lineCount);
             sc.addTail(measurementIds[0], lineCount * 10 + i, measurementIds[1], longBase
-                    + lineCount * 20 + i, measurementIds[2], (lineCount * 30 + i) / 3.0,
+                            + lineCount * 20 + i, measurementIds[2], (lineCount * 30 + i) / 3.0,
                     measurementIds[3], (longBase + lineCount * 40 + i) / 7.0);
             sc.addTail(measurementIds[4], ((lineCount + i) & 1) == 0);
             sc.addTail(measurementIds[5], enums[(int) (lineCount + i) % enums.length]);
             ret[i] = sc.toString();
         }
         return ret;
-    }
-
-    /**
-     * TestInnerWriter modify {@code checkMemorySize()} to flush RowGroup to outputStream forcely.
-     *
-     * @author kangrong
-     *
-     */
-    private class TestInnerWriter extends TSRecordWriter {
-
-        public TestInnerWriter(TSFileConfig conf, TSFileIOWriter tsFileIOWriter,
-                               WriteSupport<TSRecord> writeSupport, FileSchema schema) {
-            super(conf, tsFileIOWriter, writeSupport, schema);
-        }
-
-        @Override
-        protected void checkMemorySize() throws IOException {
-            if (recordCount == stageSize * stageDeltaObjectIds[stageState].length)
-                flushRowGroup(true);
-        }
     }
 }

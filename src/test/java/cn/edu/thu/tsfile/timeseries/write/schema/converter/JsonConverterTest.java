@@ -36,7 +36,7 @@ public class JsonConverterTest {
 
         FileSchema fileSchema = new FileSchema(obj);
         assertEquals("test_type", fileSchema.getDeltaType());
-        Collection<MeasurementDescriptor> measurements = fileSchema.getDescriptor();
+        Collection<MeasurementDescriptor> measurements = fileSchema.getDescriptor().values();
         String[] measureDesStrings =
                 {
                         "[,s3,ENUMS,BITMAP,,SNAPPY,[MAN, WOMAN],]",
