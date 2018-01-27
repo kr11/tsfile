@@ -29,7 +29,7 @@ public class TsFileUpgrader {
      */
     public void upgrade() throws IOException {
         RecordReader recordReader = new RecordReader(fileReaderInput);
-        rowGroupList = fileReader.getRowGroupReaderList();
+        rowGroupList = recordReader.getAllRowGroupReaders();
 
     }
 }
